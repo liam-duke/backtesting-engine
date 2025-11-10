@@ -54,6 +54,7 @@ class VolatilityCarry(Strategy):
         rv = self.compute_rv()
         lower_straddle_strike = close * 0.999
         upper_straddle_strike = close * 1.001
+        print(rv)
 
         # Main processing loop
         for _, option_row in options_data.iterrows():

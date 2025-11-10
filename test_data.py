@@ -24,14 +24,8 @@ daily_data = MultiDataLoader(
 
 count = 1
 
-# for data in daily_data.daily_multi_stream():
-#     result = volcarry.process_data(data[1], options_positions)
-#     if result is not None and not result.empty:
-#         print(result.columns)
-#         break
-
-for data in options_data.daily_stream():
-    result = data[1]
+for data in daily_data.daily_multi_stream():
+    result = volcarry.process_data(data[1], options_positions)
     if result is not None and not result.empty:
-        print(result.columns)
+        print(result["impl_volatility"])
         break
