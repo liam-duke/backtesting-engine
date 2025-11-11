@@ -36,9 +36,9 @@ class OhlcDataLoader(DataLoader):
     ):
         super().__init__(data_path, date_col, start_date, end_date)
 
-    def daily_stream(self):
+    def daily_stream(self) -> Iterator[Tuple[pd.Timestamp, pd.Series]]:
         """
-        Reads and yields data from OHLC CSV by day (row).
+        Reads and yields data from OHLC CSV by day (row)).
         """
         ohlc_data = pd.read_csv(self.data_path, parse_dates=[self.date_col])
 
@@ -125,7 +125,7 @@ class MultiDataLoader:
 
     def daily_multi_stream(
         self,
-    ) -> Iterator[Tuple[pd.Timestamp, dict[str, pd.DataFrame]]]:
+    ) -> Iterator[Tuple[pd.Timestamp, dict[str, pd.DataFrame | pd.Series]]]:
         """
         Reads data from multiple streams and yields a tuple per day (date, {name: data})
         """

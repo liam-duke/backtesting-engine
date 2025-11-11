@@ -22,20 +22,28 @@ class VolatilityCarry(Strategy):
 
     def process_data(
         self,
-        market_data: dict[str, pd.DataFrame],
-        options_positions: pd.Series,
+        market_data: dict[str, pd.DataFrame | pd.Series],
+        options_positions: pd.DataFrame,
     ):
         order_rows = []
 
         ohlc_data = market_data["ohlc"]
-        close = ohlc_data["close"]
+        close = round(ohlc_data["close"], 3)
+
+        self.price_window.append(close)
+
+        # Check for RV availability
+        if len(self.price_window) < self.rv_window:
+            return None
+        rv = self.compute_rv()
+        print(len(self.price_window))
 
         if options_positions.empty:
-            min_strike = close - 10
-            max_strike = close + 10
+            min_strike = close * 0.95
+            max_strike = close * 1.05
         else:
-            min_strike = options_positions["strike_price"].min()
-            max_strike = options_positions["strike_price"].max()
+            min_strike = 0.95 * options_positions["strike_price"].min()
+            max_strike = 1.05 * options_positions["strike_price"].max()
 
         options_data = market_data.get("options")
         if options_data is None:
@@ -45,33 +53,22 @@ class VolatilityCarry(Strategy):
             & (options_data["strike_price"] <= max_strike * 1000)
         ]
 
-        self.price_window.append(close)
-
-        # Check for RV availability
-        if len(self.price_window) < self.rv_window:
-            return None
-
-        rv = self.compute_rv()
         lower_straddle_strike = close * 0.999
         upper_straddle_strike = close * 1.001
-        print(rv)
 
         # Main processing loop
         for _, option_row in options_data.iterrows():
             strike_price = option_row["strike_price"] / 1000
 
             # Update held position
-            if option_row["optionid"] in options_positions.values:
-                order_row = self.create_order("UPDATE", option_row)
-                order_rows.append(order_row)
-                continue
+            if option_row["optionid"] in options_positions["optionid"].values:
+                update_order = self.create_order("UPDATE", 1, close, option_row)
+                order_rows.append(update_order)
 
             # Check ATM options
-            if lower_straddle_strike <= strike_price <= upper_straddle_strike:
+            elif lower_straddle_strike <= strike_price <= upper_straddle_strike:
                 if option_row["impl_volatility"] >= rv * self.min_straddle_premium:
-                    order_row = self.create_order("SELL", option_row)
-                    order_rows.append(order_row)
-                else:
-                    return None
+                    sell_order = self.create_order("SELL", 1, close, option_row)
+                    order_rows.append(sell_order)
 
         return pd.DataFrame(order_rows) if order_rows else None
