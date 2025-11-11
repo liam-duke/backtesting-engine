@@ -21,7 +21,6 @@ class Strategy:
         """
         pass
 
-    @abstractmethod
     def create_order(
         self, action: str, quantity: int, spot: float, option_row: pd.Series
     ) -> pd.Series:

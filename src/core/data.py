@@ -12,10 +12,16 @@ class DataLoader(ABC):
     """
 
     def __init__(
-        self, data_path: Path, date_col: str = "date", start_date=None, end_date=None
+        self,
+        data_path: Path,
+        date_col: str = "date",
+        exdate_col="exdate",
+        start_date=None,
+        end_date=None,
     ):
         self.data_path = data_path
         self.date_col = date_col
+        self.exdate_col = exdate_col
         self.start_date = (
             pd.to_datetime(start_date).tz_localize(None) if start_date else None
         )
@@ -32,9 +38,14 @@ class OhlcDataLoader(DataLoader):
     """
 
     def __init__(
-        self, data_path: Path, date_col: str = "date", start_date=None, end_date=None
+        self,
+        data_path: Path,
+        date_col: str = "date",
+        exdate_col: str = "exdate",
+        start_date=None,
+        end_date=None,
     ):
-        super().__init__(data_path, date_col, start_date, end_date)
+        super().__init__(data_path, date_col, exdate_col, start_date, end_date)
 
     def daily_stream(self) -> Iterator[Tuple[pd.Timestamp, pd.Series]]:
         """
@@ -68,11 +79,12 @@ class OptionsDataLoader(DataLoader):
         self,
         data_path: Path,
         date_col: str = "date",
+        exdate_col: str = "exdate",
         start_date=None,
         end_date=None,
         chunksize: int = 100000,
     ):
-        super().__init__(data_path, date_col, start_date, end_date)
+        super().__init__(data_path, date_col, exdate_col, start_date, end_date)
         self.chunksize = chunksize
 
     def daily_stream(self):
@@ -85,21 +97,23 @@ class OptionsDataLoader(DataLoader):
         )
 
         for chunk in reader:
+            # Convert date columns to datetime format
             chunk[self.date_col] = pd.to_datetime(chunk[self.date_col]).dt.tz_localize(
                 None
             )
+            chunk[self.exdate_col] = pd.to_datetime(
+                chunk[self.exdate_col]
+            ).dt.tz_localize(None)
 
             buffer = pd.concat([buffer, chunk], ignore_index=True)
             unique_dates = buffer[self.date_col].dt.date.unique()
 
+            # Load only complete days into buffer
             for date in unique_dates[:-1]:
-
-                # Check that date is within date range (if provided)
                 if self.start_date:
                     buffer = buffer[buffer[self.date_col] >= self.start_date]
                 if self.end_date and pd.to_datetime(date) > self.end_date:
                     return
-
                 day_market_data = buffer[buffer[self.date_col].dt.date == date]
 
                 yield pd.to_datetime(date), day_market_data

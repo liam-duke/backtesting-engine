@@ -7,12 +7,21 @@ from .base import Strategy
 
 
 class VolatilityCarry(Strategy):
-    def __init__(self, name: str, rv_window: int, min_straddle_premium: float):
+    def __init__(
+        self,
+        name: str,
+        rv_window: int,
+        min_straddle_premium: float,
+        min_dte: int = 7,
+        max_dte: int = 30,
+    ):
         super().__init__(name)
         self.rv_window = rv_window
         self.min_straddle_premium = min_straddle_premium
         self.price_window = deque(maxlen=rv_window)
         self.rolling_rv = -1
+        self.min_dte = min_dte
+        self.max_dte = max_dte
 
     def compute_rv(self):
         prices = np.array(self.price_window)
@@ -25,34 +34,38 @@ class VolatilityCarry(Strategy):
         market_data: dict[str, pd.DataFrame | pd.Series],
         options_positions: pd.DataFrame,
     ):
-        order_rows = []
+        orders = []
 
         ohlc_data = market_data["ohlc"]
         close = round(ohlc_data["close"], 3)
-
         self.price_window.append(close)
 
         # Check for RV availability
         if len(self.price_window) < self.rv_window:
             return None
         rv = self.compute_rv()
-        print(len(self.price_window))
-
-        if options_positions.empty:
-            min_strike = close * 0.95
-            max_strike = close * 1.05
-        else:
-            min_strike = 0.95 * options_positions["strike_price"].min()
-            max_strike = 1.05 * options_positions["strike_price"].max()
 
         options_data = market_data.get("options")
         if options_data is None:
             return None
-        options_data = options_data[
+
+        # Get ATM strike filters plus room for options held in portoflio (so they can be updated)
+        if options_positions.empty:
+            min_strike = close * 0.999
+            max_strike = close * 1.001
+        else:
+            min_strike = min(close * 0.999, options_positions["strike_price"].min())
+            max_strike = max(close * 1.001, options_positions["strike_price"].max())
+
+        # Filter for optins within ATM range and desired DTE
+        mask = (
             (options_data["strike_price"] >= min_strike * 1000)
             & (options_data["strike_price"] <= max_strike * 1000)
-        ]
+            & ((options_data["exdate"] - options_data["date"]).dt.days <= self.max_dte)
+        )
+        options_data = options_data[mask]
 
+        # Define ATM option bounds
         lower_straddle_strike = close * 0.999
         upper_straddle_strike = close * 1.001
 
@@ -63,12 +76,12 @@ class VolatilityCarry(Strategy):
             # Update held position
             if option_row["optionid"] in options_positions["optionid"].values:
                 update_order = self.create_order("UPDATE", 1, close, option_row)
-                order_rows.append(update_order)
+                orders.append(update_order)
 
             # Check ATM options
             elif lower_straddle_strike <= strike_price <= upper_straddle_strike:
                 if option_row["impl_volatility"] >= rv * self.min_straddle_premium:
                     sell_order = self.create_order("SELL", 1, close, option_row)
-                    order_rows.append(sell_order)
+                    orders.append(sell_order)
 
-        return pd.DataFrame(order_rows) if order_rows else None
+        return pd.DataFrame(orders) if orders else None
