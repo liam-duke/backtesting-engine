@@ -12,16 +12,19 @@ class VolatilityCarry(Strategy):
         name: str,
         rv_window: int,
         min_straddle_premium: float,
+        max_straddle_premium: float,
         min_dte: int = 7,
         max_dte: int = 30,
     ):
         super().__init__(name)
         self.rv_window = rv_window
         self.min_straddle_premium = min_straddle_premium
-        self.price_window = deque(maxlen=rv_window)
-        self.rolling_rv = -1
+        self.max_straddle_premium = max_straddle_premium
         self.min_dte = min_dte
         self.max_dte = max_dte
+
+        self.price_window = deque(maxlen=rv_window)
+        self.rolling_rv = -1
 
     def compute_rv(self):
         prices = np.array(self.price_window)
@@ -69,19 +72,23 @@ class VolatilityCarry(Strategy):
         lower_straddle_strike = close * 0.999
         upper_straddle_strike = close * 1.001
 
-        # Main processing loop
-        for _, option_row in options_data.iterrows():
-            strike_price = option_row["strike_price"] / 1000
+        # Filter into orders
+        strike_price = options_data["strike_price"] / 1000
 
-            # Update held position
-            if option_row["optionid"] in options_positions["optionid"].values:
-                update_order = self.create_order("UPDATE", 1, close, option_row)
-                orders.append(update_order)
+        held_mask = options_data["optionid"].isin(options_positions["optionid"])
+        atm_mask = strike_price.between(lower_straddle_strike, upper_straddle_strike)
+        vol_mask = (
+            options_data["impl_volatility"] >= rv * self.min_straddle_premium
+        ) & (options_data["impl_volatility"] <= rv * self.max_straddle_premium)
 
-            # Check ATM options
-            elif lower_straddle_strike <= strike_price <= upper_straddle_strike:
-                if option_row["impl_volatility"] >= rv * self.min_straddle_premium:
-                    sell_order = self.create_order("SELL", 1, close, option_row)
-                    orders.append(sell_order)
+        update_rows = options_data[held_mask]
+        sell_rows = options_data[~held_mask & atm_mask & vol_mask]
+
+        # Create order rows
+        orders = []
+        for _, option_row in update_rows.iterrows():
+            orders.append(self.create_order("UPDATE", 1, close, option_row))
+        for _, option_row in sell_rows.iterrows():
+            orders.append(self.create_order("SELL", 1, close, option_row))
 
         return pd.DataFrame(orders) if orders else None

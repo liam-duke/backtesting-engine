@@ -1,7 +1,6 @@
 # src/core/portfolio.py
 
 import pandas as pd
-from typing import Tuple
 
 
 class Portfolio:
@@ -115,35 +114,25 @@ class Portfolio:
         if orders is None:
             return
 
-        for _, order_row in orders.iterrows():
-            action = order_row["action"]
-            match action:
-                case "SELL":
-                    # Calculate premium
-                    mid_price = (order_row["best_bid"] + order_row["best_offer"]) / 2
-                    self.pnl += 100 * mid_price
+        # Separate orders by action
+        sell_orders = orders[orders["action"] == "SELL"]
+        update_orders = orders[orders["action"] == "UPDATE"]
 
-                    # Add position to portfolio
-                    self.options = pd.concat(
-                        [self.options, order_row.to_frame().T], ignore_index=True
-                    )
+        sell_mid_prices = (sell_orders["best_bid"] + sell_orders["best_offer"]) / 2
+        self.pnl += (100 * sell_mid_prices).sum()
 
-                case "BUY":
-                    # Implement this later
+        self.options = pd.concat([self.options, sell_orders], ignore_index=True)
 
-                    pass
-                case "UPDATE":
-                    # Get index of row to update
-                    idx = self.options.index[
-                        self.options["optionid"] == order_row["optionid"]
-                    ].item()
-                    cols_to_update = self.options.columns.difference(
-                        ["action", "exdate"]
-                    )
-                    self.options.loc[idx, cols_to_update] = order_row[cols_to_update]
+        if not update_orders.empty:
+            self.options = self.options.set_index("optionid", drop=False)
+            update_orders = update_orders.set_index("optionid", drop=False)
 
-                    # Get updated row
-                    option_row = self.options.loc[idx]
+            cols_to_update = self.options.columns.difference(["action", "exdate"])
+
+            self.options.loc[update_orders.index, cols_to_update] = update_orders[
+                cols_to_update
+            ]
+            self.options = self.options.reset_index(drop=True)
 
     def hedge_delta(self, spot: float):
         ### IMPLEMENT LATER ###
