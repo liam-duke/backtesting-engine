@@ -32,7 +32,7 @@ class VolatilityCarry(Strategy):
 
     def process_data(
         self,
-        market_data: dict[str, pd.DataFrame | pd.Series],
+        market_data: dict,  # [str, pd.DataFrame | pd.Series]
         options_positions: pd.DataFrame,
     ):
         orders = []
