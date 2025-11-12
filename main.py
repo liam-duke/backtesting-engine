@@ -2,48 +2,53 @@ import pandas as pd
 from pathlib import Path
 from rich.console import Console
 import matplotlib.pyplot as plt
-
-pd.set_option("display.max_rows", 1000)
-
-console = Console()
+import matplotlib.ticker as mtick
 
 from src.core.data import OptionsDataLoader, OhlcDataLoader, MultiDataLoader
 from src.core.portfolio import Portfolio
 from src.strategies.volatility_carry import VolatilityCarry
 
-OPTIONS_DATA_PATH = Path("data/spx_options_samples_~1y.csv")
-OHLC_DATA_PATH = Path("data/^SPX_history_2013-01-01_2015-01-1.csv")
+# Print formatting
+pd.set_option("display.max_rows", 1000)
+console = Console()
 
+# Constants
+OPTIONS_DATA_PATH = Path("data/spx/spx_options_2013-01-01_2023-01-01.csv")
+OHLC_DATA_PATH = Path("data/spx/spx_ohlcv_2013-01-01_2023-01-01.csv")
+START_DATE = "2013-01-01"
 END_DATE = "2014-03-05"
+INITIAL_CASH = 1_000_000
 
+# Data streams
 options_data = OptionsDataLoader(OPTIONS_DATA_PATH, "date", chunksize=10000)
 ohlc_data = OhlcDataLoader(OHLC_DATA_PATH, "date")
-
-volatility_carry = VolatilityCarry("VolCarry", 30, 1.2, 1.3)
-
-portfolio = Portfolio(1_000_000)
-
 multi_data_loader = MultiDataLoader(
     {"options": options_data, "ohlc": ohlc_data},
     end_date=END_DATE,
 )
 
-END_DATE = pd.to_datetime(END_DATE)
-START_DATE = pd.to_datetime("2013-01-01")
-total_days = (END_DATE - START_DATE).days
+# Portfolio and strategy initialization
+portfolio = Portfolio(INITIAL_CASH)
+volatility_carry = VolatilityCarry(30, 1.1, 1.5, min_dte=10, max_dte=30)
 
-pnl = []
+# Store results
+portfolio_value = []
 dates = []
-day = 0
 
+# Main simulation loop
 for date, market_data in multi_data_loader.daily_multi_stream():
     ohlc_data = market_data["ohlc"]
-    print(f"{(date - START_DATE).days / total_days * 100:.1f}%")
     orders = volatility_carry.process_data(market_data, portfolio.get_options())
-    portfolio.read_orders(orders)
-    portfolio.handle_expired(date)
-    pnl.append(portfolio.get_pnl())
+    portfolio.update_options(orders)
+    portfolio.handle_expired_options(date)
+    portfolio_value.append(portfolio.get_market_value())
     dates.append(date)
 
-plt.plot(dates, pnl)
+# Plot results
+pct_returns = [(value / INITIAL_CASH - 1) for value in portfolio_value]
+
+plt.plot(dates, pct_returns)
+plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1.0))
+plt.ylabel("Portfolio Return (%)")
+plt.xlabel("Date")
 plt.show()

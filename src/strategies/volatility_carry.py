@@ -9,14 +9,12 @@ from .base import Strategy
 class VolatilityCarry(Strategy):
     def __init__(
         self,
-        name: str,
         rv_window: int,
         min_straddle_premium: float,
         max_straddle_premium: float,
         min_dte: int = 7,
         max_dte: int = 30,
     ):
-        super().__init__(name)
         self.rv_window = rv_window
         self.min_straddle_premium = min_straddle_premium
         self.max_straddle_premium = max_straddle_premium
@@ -38,12 +36,11 @@ class VolatilityCarry(Strategy):
         options_positions: pd.DataFrame,
     ):
         orders = []
-
         ohlc_data = market_data["ohlc"]
         close = round(ohlc_data["close"], 3)
         self.price_window.append(close)
 
-        # Check for RV availability
+        # Check for rolling volatility availability
         if len(self.price_window) < self.rv_window:
             return None
         rv = self.compute_rv()
@@ -60,7 +57,7 @@ class VolatilityCarry(Strategy):
             min_strike = min(close * 0.999, options_positions["strike_price"].min())
             max_strike = max(close * 1.001, options_positions["strike_price"].max())
 
-        # Filter for optins within ATM range and desired DTE
+        # Filter for options within strike and desired DTE range
         mask = (
             (options_data["strike_price"] >= min_strike * 1000)
             & (options_data["strike_price"] <= max_strike * 1000)
@@ -72,7 +69,7 @@ class VolatilityCarry(Strategy):
         lower_straddle_strike = close * 0.999
         upper_straddle_strike = close * 1.001
 
-        # Filter into orders
+        # Filter option orders
         strike_price = options_data["strike_price"] / 1000
 
         held_mask = options_data["optionid"].isin(options_positions["optionid"])

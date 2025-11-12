@@ -4,10 +4,7 @@ from abc import ABC, abstractmethod
 import pandas as pd
 
 
-class Strategy:
-    def __init__(self, name: str):
-        self.name = name
-
+class Strategy(ABC):
     @abstractmethod
     def process_data(
         self,
