@@ -146,7 +146,6 @@ class Portfolio:
         commission_per_share: float,
         base_spread: float,
         spread_std: float,
-        hedge_threshold_shares: int = 5,
     ):
         """
         TEMPORARY DELTA HEDGING IMPLEMENTATION
@@ -161,9 +160,6 @@ class Portfolio:
 
         target_delta_shares = int(round(self.get_delta_exposure()))
         net_trade = target_delta_shares - self.shares_owned
-
-        if abs(net_trade) < hedge_threshold_shares:
-            return
 
         trade_qty = abs(net_trade)
 

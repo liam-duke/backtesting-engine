@@ -38,11 +38,12 @@ class VolatilityCarry(Strategy):
         options_positions: pd.DataFrame,
     ):
         orders = []
+
         ohlc_data = market_data["ohlc"]
         close = round(ohlc_data["close"], 3)
         self.price_window.append(close)
 
-        # Check for rolling volatility availability
+        # Check for RV availability
         if len(self.price_window) < self.rv_window:
             return None
         rv = self.compute_rv()
@@ -59,12 +60,12 @@ class VolatilityCarry(Strategy):
             min_strike = min(close * 0.999, options_positions["strike_price"].min())
             max_strike = max(close * 1.001, options_positions["strike_price"].max())
 
-        # Filter for options within strike and desired DTE range
+        # Filter for optins within ATM range and desired DTE
         mask = (
             (options_data["strike_price"] >= min_strike * 1000)
             & (options_data["strike_price"] <= max_strike * 1000)
-            & ((options_data["exdate"] - options_data["date"]).dt.days >= self.min_dte)
             & ((options_data["exdate"] - options_data["date"]).dt.days <= self.max_dte)
+            & (options_data["cp_flag"] == "P")
         )
         options_data = options_data[mask]
 
@@ -72,7 +73,7 @@ class VolatilityCarry(Strategy):
         lower_straddle_strike = close * 0.999
         upper_straddle_strike = close * 1.001
 
-        # Filter option orders
+        # Filter into orders
         strike_price = options_data["strike_price"] / 1000
 
         held_mask = options_data["optionid"].isin(options_positions["optionid"])
@@ -84,27 +85,16 @@ class VolatilityCarry(Strategy):
         update_rows = options_data[held_mask]
         sell_rows = options_data[~held_mask & atm_mask & vol_mask]
 
-        sell_rows = pd.concat(
-            [
-                sell_rows[sell_rows["cp_flag"] == "C"],
-                sell_rows[sell_rows["cp_flag"] == "P"],
-            ]
-        )
-
-        # Create order rows
+        # Create order rows, limit max orders
         orders = []
-        for _, option_order_row in update_rows.iterrows():
-            orders.append(
-                self.create_option_order("UPDATE", 1, close, option_order_row)
-            )
-
-        # Limit max shorts
         active_positions = len(options_positions)
         slots_remaining = max(0, self.max_positions - active_positions)
-        for _, option_order_row in sell_rows.iterrows():
+        for _, option_row in update_rows.iterrows():
+            orders.append(self.create_option_order("UPDATE", 1, close, option_row))
+        for _, option_row in sell_rows.iterrows():
             if slots_remaining <= 0:
                 break
-            orders.append(self.create_option_order("SELL", 1, close, option_order_row))
+            orders.append(self.create_option_order("SELL", 1, close, option_row))
             slots_remaining -= 1
 
         return pd.DataFrame(orders) if orders else None

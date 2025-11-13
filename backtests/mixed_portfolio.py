@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from rich.console import Console
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ console = Console()
 OPTIONS_DATA_PATH = Path("data/spx/spx_options_2013-01-01_2023-01-01.csv")
 OHLC_DATA_PATH = Path("data/spx/spx_ohlcv_2013-01-01_2023-01-01.csv")
 START_DATE = "2013-01-01"
-END_DATE = "2015-01-01"
+END_DATE = "2023-01-01"
 INITIAL_CASH = 1_000_000
 
 # Data streams
@@ -35,7 +36,7 @@ volatility_carry = VolatilityCarry(
     max_straddle_premium=1.8,
     min_dte=7,
     max_dte=14,
-    max_positions=36,
+    max_positions=16,
 )
 
 # Store results
@@ -55,7 +56,7 @@ for date, market_data in multi_data_loader.daily_multi_stream():
     if prev_spot != 0:
         equity_portfolio_value.append((close / prev_spot) * equity_portfolio_value[-1])
         pure_portfolio_value.append((close / prev_spot) * pure_portfolio_value[-1])
-        options_portfolio.update_delta_pnl(close, close - prev_spot, 0.01, 0.02, 0.01)
+        # options_portfolio.update_delta_pnl(close, close - prev_spot, 0.01, 0.02, 0.01)
     options_portfolio_value.append(options_portfolio.get_market_value())
     dates.append(date)
     prev_spot = close
@@ -71,6 +72,14 @@ mixed_pct_returns = [(value / INITIAL_CASH - 1) for value in mixed_portfolio_val
 # Basic analytics
 pure_sharpe = []
 
+# Calculate sharpe ratios
+mixed_returns = np.diff(mixed_portfolio_value) / mixed_portfolio_value[:-1]
+pure_returns = np.diff(equity_portfolio_value) / equity_portfolio_value[:-1]
+mixed_sharpe_ratio = np.mean(mixed_returns) / np.std(mixed_returns) * np.sqrt(252)
+pure_sharpe_ratio = np.mean(pure_returns) / np.std(pure_returns) * np.sqrt(252)
+print(f"Pure Sharpe Ratio: {pure_sharpe_ratio:.2f}")
+print(f"Mixed Sharpe Ratio: {mixed_sharpe_ratio:.2f}")
+
 plt.figure(figsize=(12, 6))
 plt.plot(dates, pure_pct_returns, label="SPX Pure Equity")
 plt.plot(dates, mixed_pct_returns, label="SPX Mixed Equity & Volatility Carry")
@@ -79,7 +88,7 @@ plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1.0))
 
 plt.xlabel("Date")
 plt.ylabel("Portfolio Return (%)")
-plt.title("SPX Pure Equity vs SPX Mixed Equty and Volatility Carry (7-14 DTE)")
+plt.title("SPX Pure Equity vs SPX Mixed Equty and Volatility Carry (23-30 DTE)")
 plt.legend()
 plt.tight_layout()
 plt.show()
