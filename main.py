@@ -30,7 +30,12 @@ multi_data_loader = MultiDataLoader(
 # Portfolio and strategy initialization
 options_portfolio = Portfolio(INITIAL_CASH / 2)
 volatility_carry = VolatilityCarry(
-    14, 1.2, 1.8, min_dte=7, max_dte=14, max_positions=12
+    rv_window=14,
+    min_straddle_premium=1.2,
+    max_straddle_premium=1.8,
+    min_dte=7,
+    max_dte=14,
+    max_positions=36,
 )
 
 # Store results
@@ -50,7 +55,7 @@ for date, market_data in multi_data_loader.daily_multi_stream():
     if prev_spot != 0:
         equity_portfolio_value.append((close / prev_spot) * equity_portfolio_value[-1])
         pure_portfolio_value.append((close / prev_spot) * pure_portfolio_value[-1])
-        options_portfolio.update_delta_pnl(close, close - prev_spot, 0.005, 0.02, 0.004)
+        options_portfolio.update_delta_pnl(close, close - prev_spot, 0.01, 0.02, 0.01)
     options_portfolio_value.append(options_portfolio.get_market_value())
     dates.append(date)
     prev_spot = close
@@ -76,6 +81,5 @@ plt.xlabel("Date")
 plt.ylabel("Portfolio Return (%)")
 plt.title("SPX Pure Equity vs SPX Mixed Equty and Volatility Carry (7-14 DTE)")
 plt.legend()
-plt.grid(True)
 plt.tight_layout()
 plt.show()

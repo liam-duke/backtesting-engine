@@ -73,8 +73,6 @@ class Portfolio:
             merged.loc[mask, "spot"] = merged.loc[mask, "spot_new"]
             self.equities = merged.drop(columns="spot_new")
 
-        pass
-
     def update_options(self, option_orders: pd.DataFrame | None):
         if option_orders is None:
             return
