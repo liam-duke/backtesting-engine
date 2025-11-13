@@ -12,14 +12,16 @@ class VolatilityCarry(Strategy):
         rv_window: int,
         min_straddle_premium: float,
         max_straddle_premium: float,
-        min_dte: int = 7,
-        max_dte: int = 30,
+        min_dte: int,
+        max_dte: int,
+        max_positions: int,
     ):
         self.rv_window = rv_window
         self.min_straddle_premium = min_straddle_premium
         self.max_straddle_premium = max_straddle_premium
         self.min_dte = min_dte
         self.max_dte = max_dte
+        self.max_positions = max_positions
 
         self.price_window = deque(maxlen=rv_window)
         self.rolling_rv = -1
@@ -61,6 +63,7 @@ class VolatilityCarry(Strategy):
         mask = (
             (options_data["strike_price"] >= min_strike * 1000)
             & (options_data["strike_price"] <= max_strike * 1000)
+            & ((options_data["exdate"] - options_data["date"]).dt.days >= self.min_dte)
             & ((options_data["exdate"] - options_data["date"]).dt.days <= self.max_dte)
         )
         options_data = options_data[mask]
@@ -81,11 +84,27 @@ class VolatilityCarry(Strategy):
         update_rows = options_data[held_mask]
         sell_rows = options_data[~held_mask & atm_mask & vol_mask]
 
+        sell_rows = pd.concat(
+            [
+                sell_rows[sell_rows["cp_flag"] == "C"],
+                sell_rows[sell_rows["cp_flag"] == "P"],
+            ]
+        )
+
         # Create order rows
         orders = []
-        for _, option_row in update_rows.iterrows():
-            orders.append(self.create_order("UPDATE", 1, close, option_row))
-        for _, option_row in sell_rows.iterrows():
-            orders.append(self.create_order("SELL", 1, close, option_row))
+        for _, option_order_row in update_rows.iterrows():
+            orders.append(
+                self.create_option_order("UPDATE", 1, close, option_order_row)
+            )
+
+        # Limit max shorts
+        active_positions = len(options_positions)
+        slots_remaining = max(0, self.max_positions - active_positions)
+        for _, option_order_row in sell_rows.iterrows():
+            if slots_remaining <= 0:
+                break
+            orders.append(self.create_option_order("SELL", 1, close, option_order_row))
+            slots_remaining -= 1
 
         return pd.DataFrame(orders) if orders else None

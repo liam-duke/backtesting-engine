@@ -29,5 +29,5 @@ OPTION_COLUMNS = [
 EQUITY_COLUMNS = [
     "symbol",
     "spot",
-    "shares_owned",
+    "quantity",
 ]

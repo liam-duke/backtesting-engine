@@ -102,7 +102,7 @@ class OptionsDataLoader(DataLoader):
                 None
             )
             chunk[self.exdate_col] = pd.to_datetime(
-                chunk[self.exdate_col]
+            chunk[self.exdate_col]
             ).dt.tz_localize(None)
 
             buffer = pd.concat([buffer, chunk], ignore_index=True)
@@ -139,7 +139,7 @@ class MultiDataLoader:
 
     def daily_multi_stream(
         self,
-    ) -> Iterator[Tuple[pd.Timestamp, dict[str, pd.DataFrame | pd.Series]]]:
+    ) -> Iterator:
         """
         Reads data from multiple streams and yields a tuple per day (date, {name: data})
         """

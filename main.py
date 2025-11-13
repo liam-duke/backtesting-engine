@@ -16,7 +16,7 @@ console = Console()
 OPTIONS_DATA_PATH = Path("data/spx/spx_options_2013-01-01_2023-01-01.csv")
 OHLC_DATA_PATH = Path("data/spx/spx_ohlcv_2013-01-01_2023-01-01.csv")
 START_DATE = "2013-01-01"
-END_DATE = "2014-03-05"
+END_DATE = "2015-01-01"
 INITIAL_CASH = 1_000_000
 
 # Data streams
@@ -28,27 +28,54 @@ multi_data_loader = MultiDataLoader(
 )
 
 # Portfolio and strategy initialization
-portfolio = Portfolio(INITIAL_CASH)
-volatility_carry = VolatilityCarry(30, 1.1, 1.5, min_dte=10, max_dte=30)
+options_portfolio = Portfolio(INITIAL_CASH / 2)
+volatility_carry = VolatilityCarry(
+    14, 1.2, 1.8, min_dte=7, max_dte=14, max_positions=12
+)
 
 # Store results
-portfolio_value = []
+prev_spot = 0.0
+options_portfolio_value = []
+equity_portfolio_value = [INITIAL_CASH / 2]
+pure_portfolio_value = [INITIAL_CASH]
 dates = []
 
 # Main simulation loop
 for date, market_data in multi_data_loader.daily_multi_stream():
     ohlc_data = market_data["ohlc"]
-    orders = volatility_carry.process_data(market_data, portfolio.get_options())
-    portfolio.update_options(orders)
-    portfolio.handle_expired_options(date)
-    portfolio_value.append(portfolio.get_market_value())
+    close = ohlc_data["close"]
+    orders = volatility_carry.process_data(market_data, options_portfolio.get_options())
+    options_portfolio.update_options(orders)
+    options_portfolio.handle_expired_options(date)
+    if prev_spot != 0:
+        equity_portfolio_value.append((close / prev_spot) * equity_portfolio_value[-1])
+        pure_portfolio_value.append((close / prev_spot) * pure_portfolio_value[-1])
+        options_portfolio.update_delta_pnl(close, close - prev_spot, 0.005, 0.02, 0.004)
+    options_portfolio_value.append(options_portfolio.get_market_value())
     dates.append(date)
+    prev_spot = close
 
-# Plot results
-pct_returns = [(value / INITIAL_CASH - 1) for value in portfolio_value]
+mixed_portfolio_value = [
+    x + y for x, y in zip(equity_portfolio_value, options_portfolio_value)
+]
 
-plt.plot(dates, pct_returns)
+# Calculate percent returns
+pure_pct_returns = [(value / INITIAL_CASH - 1) for value in pure_portfolio_value]
+mixed_pct_returns = [(value / INITIAL_CASH - 1) for value in mixed_portfolio_value]
+
+# Basic analytics
+pure_sharpe = []
+
+plt.figure(figsize=(12, 6))
+plt.plot(dates, pure_pct_returns, label="SPX Pure Equity")
+plt.plot(dates, mixed_pct_returns, label="SPX Mixed Equity & Volatility Carry")
+
 plt.gca().yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1.0))
-plt.ylabel("Portfolio Return (%)")
+
 plt.xlabel("Date")
+plt.ylabel("Portfolio Return (%)")
+plt.title("SPX Pure Equity vs SPX Mixed Equty and Volatility Carry (7-14 DTE)")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
 plt.show()
