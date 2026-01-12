@@ -76,6 +76,81 @@ class Portfolio:
             merged.loc[mask, "spot"] = merged.loc[mask, "spot_new"]
             self.equities = merged.drop(columns="spot_new")
 
+    def update_dividends(
+        self,
+        current_date: pd.Timestamp,
+        dividends: pd.DataFrame | dict | pd.Series | None,
+        *,
+        date_col: str = "date",
+        symbol_col: str = "symbol",
+        dividend_col: str = "dividend",
+        pay_on_shorts: bool = False,
+    ) -> float:
+        """
+        Apply dividend cashflows to portfolio
+        """
+        if dividends is None or self.equities.empty:
+            return 0.0
+
+        dt = pd.to_datetime(current_date).tz_localize(None).normalize()
+
+        # Building a Series where index=symbol, value=dividend-per-share for current day
+        if isinstance(dividends, pd.DataFrame):
+            if date_col not in dividends.columns:
+                raise ValueError(f"dividends df missing date_col='{date_col}'")
+            if symbol_col not in dividends.columns or dividend_col not in dividends.columns:
+                raise ValueError(
+                    f"dividends df must have columns '{symbol_col}' and '{dividend_col}'"
+                )
+
+            d = dividends.copy()
+            d[date_col] = pd.to_datetime(d[date_col]).dt.tz_localize(None).dt.normalize()
+            today = d[d[date_col] == dt]
+            if today.empty:
+                return 0.0
+
+            div_per_share = (
+                today.groupby(symbol_col, as_index=True)[dividend_col].sum().astype(float)
+            )
+
+        elif isinstance(dividends, pd.Series):
+            div_per_share = dividends.astype(float)
+
+        elif isinstance(dividends, dict):
+            div_per_share = pd.Series(dividends, dtype=float)
+
+        else:
+            raise TypeError("Dividends must be a DataFrame, dict, Series, or None")
+
+        eq = self.equities
+        if symbol_col not in eq.columns or "quantity" not in eq.columns:
+            return 0.0
+
+        # Net shares from order book: BUY adds shares, SELL removes shares, UPDATE doesn't change shares
+        if "action" in eq.columns:
+            action = eq["action"].astype(str).str.upper()
+            sign = np.where(action == "BUY", 1, np.where(action == "SELL", -1, 0))
+            signed_shares = eq["quantity"].astype(float) * sign
+        else:
+            signed_shares = eq["quantity"].astype(float)
+
+        shares_by_symbol = signed_shares.groupby(eq[symbol_col]).sum()
+        eligible_shares = shares_by_symbol if pay_on_shorts else shares_by_symbol.clip(lower=0)
+
+        # Align shares with dividend-per-share on symbol, compute total cash dividend for the day
+        aligned = pd.concat([eligible_shares, div_per_share], axis=1, keys=["shares", "dps"]).dropna()
+        if aligned.empty:
+            return 0.0
+
+        dividend_cash = float((aligned["shares"] * aligned["dps"]).sum())
+        self.market_value += dividend_cash
+
+        if not hasattr(self, "dividends_received"):
+            self.dividends_received = 0.0
+        self.dividends_received += dividend_cash
+
+        return dividend_cash
+
     def update_options(self, option_orders: pd.DataFrame | None):
         """
         Update current options positions to market

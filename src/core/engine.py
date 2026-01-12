@@ -47,6 +47,7 @@ class BacktestEngine:
 
                 self.portfolio.update_options(option_orders)
                 self.portfolio.update_equities(equity_orders)
+                self.portfolio.update_dividends(date, market_data.get("dividends"))
 
                 if delta_hedging and prev_close != 0.0:
                     self.portfolio.update_delta_pnl(
