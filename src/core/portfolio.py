@@ -97,7 +97,9 @@ class Portfolio:
         self.cash += 100 * (sell_mid_prices.sum() + buy_mid_prices.sum())
 
         # Add positions to portfolio
-        self.options = pd.concat([self.options, sell_orders], ignore_index=True)
+        self.options = pd.concat(
+            [self.options, sell_orders, buy_orders], ignore_index=True
+        )
 
         # Update held options to market data
         if not update_orders.empty:

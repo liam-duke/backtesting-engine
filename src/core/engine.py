@@ -47,13 +47,13 @@ class BacktestEngine:
                 self.portfolio.update_options(option_orders)
                 self.portfolio.update_equities(equity_orders)
 
-                if delta_hedging:
-                    self.portfolio.hedge_delta(
-                        close,
-                        commission_per_share=0.01,
-                        base_spread=0.005,
-                        spread_std=0.001,
-                    )
+            if delta_hedging:
+                self.portfolio.hedge_delta(
+                    close,
+                    commission_per_share=0.01,
+                    base_spread=0.005,
+                    spread_std=0.001,
+                )
 
             # Record daily performance
             self.analytics.record_day(date, self.portfolio)
