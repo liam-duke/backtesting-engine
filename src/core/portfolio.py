@@ -92,12 +92,18 @@ class Portfolio:
         update_orders = option_orders[option_orders["quantity"] == 0]
 
         # Calculate and process net premium / allocation
-        buy_mid_prices = -(buy_orders["best_bid"] + buy_orders["best_offer"]) / 2
+        buy_mid_prices = (buy_orders["best_bid"] + buy_orders["best_offer"]) / 2
         sell_mid_prices = (sell_orders["best_bid"] + sell_orders["best_offer"]) / 2
-        self.cash += 100 * (sell_mid_prices.sum() + buy_mid_prices.sum())
+
+        buy_value = (buy_mid_prices * buy_orders["quantity"] * 100).sum()
+        sell_value = (sell_mid_prices * sell_orders["quantity"] * 100).sum()
+
+        self.cash -= buy_value + sell_value
 
         # Add positions to portfolio
-        self.options = pd.concat([self.options, sell_orders], ignore_index=True)
+        self.options = pd.concat(
+            [self.options, sell_orders, buy_orders], ignore_index=True
+        )
 
         # Update held options to market data
         if not update_orders.empty:
