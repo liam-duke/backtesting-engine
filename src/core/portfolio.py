@@ -95,8 +95,8 @@ class Portfolio:
         buy_mid_prices = (buy_orders["best_bid"] + buy_orders["best_offer"]) / 2
         sell_mid_prices = (sell_orders["best_bid"] + sell_orders["best_offer"]) / 2
 
-        buy_value = buy_mid_prices * buy_orders["quantity"] * 100
-        sell_value = sell_mid_prices * sell_orders["quantity"] * 100
+        buy_value = (buy_mid_prices * buy_orders["quantity"] * 100).sum()
+        sell_value = (sell_mid_prices * sell_orders["quantity"] * 100).sum()
 
         self.cash -= buy_value + sell_value
 
