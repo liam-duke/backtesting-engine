@@ -16,7 +16,7 @@ class AnalyticsEngine:
         """
 
         current_market_value = portfolio.get_net_asset_value() + portfolio.get_cash()
-        current_delta_exposure = portfolio.get_delta_exposure()
+        current_delta_exposure = portfolio.get_greek_exposure("delta")
 
         self.daily_metrics.append(
             {
