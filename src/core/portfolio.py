@@ -30,10 +30,10 @@ class Portfolio:
         return self.cash
 
     def get_greek_exposure(self, greek: str):
-        exposure = self.options[greek].sum()
+        greek_exposure = self.options[greek].sum()
         if greek == "delta":
-            exposure += self.shares_owned
-        return exposure
+            greek_exposure += self.shares_owned
+        return greek_exposure
 
     def update_equities(self, equity_orders: pd.DataFrame | None):
         """
