@@ -23,7 +23,12 @@ class BacktestEngine:
         self.console = Console()
 
     def run(
-        self, strategy: Strategy, delta_hedging: bool, start_date=None, end_date=None
+        self,
+        strategy: Strategy,
+        delta_hedging: bool,
+        start_date=None,
+        end_date=None,
+        delta_threshold: float = 0.5,
     ):
 
         multi_data_loader = MultiDataLoader(self.data_loaders, start_date, end_date)
@@ -47,7 +52,10 @@ class BacktestEngine:
                 self.portfolio.update_options(option_orders)
                 self.portfolio.update_equities(equity_orders)
 
-            if delta_hedging:
+            if (
+                delta_hedging
+                and abs(self.portfolio.get_greek_exposure("delta")) > delta_threshold
+            ):
                 self.portfolio.hedge_delta(
                     close,
                     commission_per_share=0.01,
